@@ -1,0 +1,11 @@
+.wcct-turnstile {
+	margin: 0 0 1em;
+}
+
+.wcct-turnstile:empty {
+	margin: 0;
+}
+
+.wcct-turnstile--blocks {
+	margin-bottom: 16px;
+}
