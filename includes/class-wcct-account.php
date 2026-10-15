@@ -22,7 +22,9 @@ class WCCT_Account {
 
 		// Registration. Only WC_Form_Handler fires this filter, so accounts
 		// created during checkout are covered by the checkout check instead.
-		add_action( 'woocommerce_register_form', array( $this, 'render_register_widget' ) );
+		// Priority 30 places the widget after the privacy policy text (priority 20),
+		// directly above the Register button.
+		add_action( 'woocommerce_register_form', array( $this, 'render_register_widget' ), 30 );
 		add_filter( 'woocommerce_process_registration_errors', array( $this, 'validate_registration' ) );
 
 		// Lost password.

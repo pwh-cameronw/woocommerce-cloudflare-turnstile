@@ -40,7 +40,7 @@ A WordPress plugin that adds [Cloudflare Turnstile](https://developers.cloudflar
 | Classic shortcode  | Above **Place order** (`woocommerce_review_order_before_submit`) | Hidden `cf-turnstile-response` form field     | `woocommerce_after_checkout_validation`                       |
 | Checkout block     | Injected above **Place order**                   | Store API `extensions.cloudflare-turnstile.token` | `woocommerce_store_api_checkout_update_order_from_request` (before payment) |
 | My Account login   | `woocommerce_login_form`                         | Hidden `cf-turnstile-response` form field     | `woocommerce_process_login_errors`                            |
-| Registration       | `woocommerce_register_form`                      | Hidden `cf-turnstile-response` form field     | `woocommerce_process_registration_errors`                     |
+| Registration       | `woocommerce_register_form` (priority 30, after the privacy text) | Hidden `cf-turnstile-response` form field     | `woocommerce_process_registration_errors`                     |
 | Lost password      | `woocommerce_lostpassword_form`                  | Hidden `cf-turnstile-response` form field     | `lostpassword_post` (WooCommerce form only)                   |
 
 ## Developer hooks
