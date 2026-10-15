@@ -18,10 +18,16 @@ class WCCT_Verifier {
 	const ENDPOINT = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 	/**
-	 * Action name bound to the widget; checked on verification so tokens
-	 * issued for other forms on the site cannot be reused at checkout.
+	 * Action names bound to each widget, keyed by context. Checked on
+	 * verification so a token issued for one form cannot be reused on another.
 	 */
-	const ACTION = 'wc-checkout';
+	const ACTIONS = array(
+		'classic'       => 'wc-checkout',
+		'store_api'     => 'wc-checkout',
+		'login'         => 'wc-login',
+		'register'      => 'wc-register',
+		'lost_password' => 'wc-lost-password',
+	);
 
 	/**
 	 * Maximum token length accepted by Siteverify.
@@ -29,21 +35,34 @@ class WCCT_Verifier {
 	const MAX_TOKEN_LENGTH = 2048;
 
 	/**
+	 * Turnstile action name for a context.
+	 *
+	 * @param string $context Context, see WCCT_Settings::should_protect().
+	 * @return string
+	 */
+	public static function action( $context ) {
+		return isset( self::ACTIONS[ $context ] ) ? self::ACTIONS[ $context ] : 'wc-' . $context;
+	}
+
+	/**
 	 * Verify a token.
 	 *
-	 * @param string $token Value of cf-turnstile-response.
+	 * @param string $token   Value of cf-turnstile-response.
+	 * @param string $context Form the token was submitted from.
 	 * @return true|WP_Error True when the token is valid.
 	 */
-	public static function verify( $token ) {
-		$token = is_string( $token ) ? trim( $token ) : '';
+	public static function verify( $token, $context = 'classic' ) {
+		$token   = is_string( $token ) ? trim( $token ) : '';
+		$action  = self::action( $context );
+		$message = WCCT_Settings::error_message( $context );
 
 		if ( '' === $token ) {
-			return new WP_Error( 'wcct_missing_token', WCCT_Settings::error_message() );
+			return new WP_Error( 'wcct_missing_token', $message );
 		}
 
 		if ( strlen( $token ) > self::MAX_TOKEN_LENGTH ) {
 			self::log( 'Rejected token longer than ' . self::MAX_TOKEN_LENGTH . ' characters.' );
-			return new WP_Error( 'wcct_invalid_token', WCCT_Settings::error_message() );
+			return new WP_Error( 'wcct_invalid_token', $message );
 		}
 
 		$body = array(
@@ -80,13 +99,13 @@ class WCCT_Verifier {
 		if ( empty( $result['success'] ) ) {
 			$errors = isset( $result['error-codes'] ) ? implode( ', ', (array) $result['error-codes'] ) : 'none';
 			self::log( 'Verification failed. Error codes: ' . $errors );
-			return new WP_Error( 'wcct_failed', WCCT_Settings::error_message() );
+			return new WP_Error( 'wcct_failed', $message );
 		}
 
 		// Test keys return an empty action, so only compare when one is present.
-		if ( ! empty( $result['action'] ) && self::ACTION !== $result['action'] ) {
+		if ( ! empty( $result['action'] ) && $action !== $result['action'] ) {
 			self::log( 'Token was issued for a different action: ' . $result['action'] );
-			return new WP_Error( 'wcct_failed', WCCT_Settings::error_message() );
+			return new WP_Error( 'wcct_failed', $message );
 		}
 
 		return true;

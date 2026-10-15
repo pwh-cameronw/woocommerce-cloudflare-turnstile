@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name:          Cloudflare Turnstile for WooCommerce Checkout
+ * Plugin Name:          Cloudflare Turnstile for WooCommerce
  * Plugin URI:           https://github.com/pwh-cameronw/woocommerce-cloudflare-turnstile
- * Description:          Protects the WooCommerce checkout (classic shortcode and Checkout block) with Cloudflare Turnstile.
- * Version:              1.0.0
+ * Description:          Protects the WooCommerce checkout (classic shortcode and Checkout block) and My Account login, registration and lost password forms with Cloudflare Turnstile.
+ * Version:              1.1.0
  * Requires at least:    6.3
  * Requires PHP:         7.4
  * Requires Plugins:     woocommerce
@@ -19,7 +19,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WCCT_VERSION', '1.0.0' );
+define( 'WCCT_VERSION', '1.1.0' );
 define( 'WCCT_PLUGIN_FILE', __FILE__ );
 define( 'WCCT_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WCCT_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -51,13 +51,16 @@ function wcct_init() {
 	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-settings.php';
 	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-integration.php';
 	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-verifier.php';
+	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-assets.php';
 	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-checkout.php';
+	require_once WCCT_PLUGIN_DIR . 'includes/class-wcct-account.php';
 
 	add_filter( 'woocommerce_integrations', 'wcct_register_integration' );
 	add_filter( 'plugin_action_links_' . plugin_basename( __FILE__ ), 'wcct_plugin_action_links' );
 	add_action( 'admin_notices', 'wcct_missing_keys_notice' );
 
 	( new WCCT_Checkout() )->init();
+	( new WCCT_Account() )->init();
 }
 add_action( 'plugins_loaded', 'wcct_init' );
 
@@ -91,7 +94,7 @@ function wcct_missing_woocommerce_notice() {
 	if ( ! current_user_can( 'activate_plugins' ) ) {
 		return;
 	}
-	echo '<div class="notice notice-error"><p>' . esc_html__( 'Cloudflare Turnstile for WooCommerce Checkout requires WooCommerce to be installed and active.', 'woocommerce-cloudflare-turnstile' ) . '</p></div>';
+	echo '<div class="notice notice-error"><p>' . esc_html__( 'Cloudflare Turnstile for WooCommerce requires WooCommerce to be installed and active.', 'woocommerce-cloudflare-turnstile' ) . '</p></div>';
 }
 
 /**
@@ -107,7 +110,7 @@ function wcct_missing_keys_notice() {
 	$url = admin_url( 'admin.php?page=wc-settings&tab=integration&section=' . WCCT_Settings::INTEGRATION_ID );
 	printf(
 		'<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
-		esc_html__( 'Cloudflare Turnstile is enabled but the site key or secret key is missing, so the checkout is not protected.', 'woocommerce-cloudflare-turnstile' ),
+		esc_html__( 'Cloudflare Turnstile is enabled but the site key or secret key is missing, so your store is not protected.', 'woocommerce-cloudflare-turnstile' ),
 		esc_url( $url ),
 		esc_html__( 'Add your keys', 'woocommerce-cloudflare-turnstile' )
 	);

@@ -1,9 +1,11 @@
 /**
- * Renders Cloudflare Turnstile on the WooCommerce checkout.
+ * Renders Cloudflare Turnstile on WooCommerce forms.
  *
- * Classic checkout: the container is printed by PHP inside the order review
- * fragment and re-rendered after every `updated_checkout` refresh. The token is
- * submitted through the hidden `cf-turnstile-response` field Turnstile adds.
+ * Server-rendered forms (classic checkout, My Account login / registration /
+ * lost password): PHP prints a `.wcct-turnstile[data-action]` container and the
+ * token is submitted through the hidden `cf-turnstile-response` field Turnstile
+ * adds. The classic checkout container lives in the order review fragment, so
+ * it is re-rendered after every `updated_checkout` refresh.
  *
  * Checkout block: the container is injected above the "Place order" button and
  * the token is passed to the Store API as extension data.
@@ -13,33 +15,43 @@
 	'use strict';
 
 	var cfg = window.wcctTurnstileConfig || {};
-	var widgetId = null;
-	var widgetContainer = null;
+	var widgets = []; // { id, el }
 	var started = false;
 
-	function isRendered( container ) {
-		return container === widgetContainer && widgetId !== null;
-	}
+	function noop() {}
 
-	function removeWidget() {
-		if ( widgetId !== null ) {
-			try {
-				turnstile.remove( widgetId );
-			} catch ( e ) {
-				// The element may already have been replaced by a checkout refresh.
+	function findWidget( el ) {
+		for ( var i = 0; i < widgets.length; i++ ) {
+			if ( widgets[ i ].el === el ) {
+				return widgets[ i ];
 			}
 		}
-		widgetId = null;
-		widgetContainer = null;
+		return null;
 	}
 
-	function render( container, onToken ) {
-		removeWidget();
-		container.innerHTML = '';
+	// Drop widgets whose container was removed, e.g. by a checkout refresh.
+	function prune() {
+		widgets = widgets.filter( function ( widget ) {
+			if ( document.body.contains( widget.el ) ) {
+				return true;
+			}
+			try {
+				turnstile.remove( widget.id );
+			} catch ( e ) {}
+			return false;
+		} );
+	}
+
+	function render( el, action, onToken ) {
+		prune();
+		if ( findWidget( el ) ) {
+			return;
+		}
+		el.innerHTML = '';
 
 		var options = {
 			sitekey: cfg.siteKey,
-			action: cfg.action,
+			action: action,
 			theme: cfg.theme,
 			size: cfg.size,
 			appearance: cfg.appearance,
@@ -61,40 +73,61 @@
 			options.language = cfg.language;
 		}
 
-		widgetContainer = container;
-		widgetId = turnstile.render( container, options );
+		var id = turnstile.render( el, options );
+		if ( id !== undefined && id !== null ) {
+			widgets.push( { id: id, el: el } );
+		}
 	}
 
-	function reset( onToken ) {
-		onToken( '' );
-		if ( widgetId !== null && widgetContainer && document.body.contains( widgetContainer ) ) {
+	function reset( el ) {
+		var widget = findWidget( el );
+		if ( widget ) {
 			try {
-				turnstile.reset( widgetId );
+				turnstile.reset( widget.id );
 			} catch ( e ) {}
 		}
 	}
 
-	/* Classic (shortcode) checkout ---------------------------------------- */
+	function isVisible( el ) {
+		return !! ( el.offsetWidth || el.offsetHeight || el.getClientRects().length );
+	}
 
-	function initClassic( $ ) {
-		var noop = function () {};
+	/* Server-rendered forms ------------------------------------------------ */
 
-		function ensure() {
-			var container = document.querySelector( 'form.checkout .wcct-turnstile' );
-			if ( ! container || isRendered( container ) ) {
-				return;
+	// Containers in hidden forms (like the checkout's collapsed login form) are
+	// rendered once they become visible, so the widget can size itself.
+	function renderServerWidgets() {
+		var containers = document.querySelectorAll( '.wcct-turnstile[data-action]' );
+		for ( var i = 0; i < containers.length; i++ ) {
+			if ( isVisible( containers[ i ] ) ) {
+				render( containers[ i ], containers[ i ].getAttribute( 'data-action' ), noop );
 			}
-			render( container, noop );
+		}
+	}
+
+	function initServerForms() {
+		renderServerWidgets();
+
+		// Catch forms that were revealed after load (toggles, tabs, popups).
+		document.addEventListener( 'focusin', renderServerWidgets );
+		document.addEventListener( 'click', function () {
+			window.setTimeout( renderServerWidgets, 450 ); // After jQuery slide animations.
+		} );
+
+		var $ = window.jQuery;
+		if ( ! $ ) {
+			return;
 		}
 
-		$( document.body ).on( 'updated_checkout', ensure );
+		$( document.body ).on( 'updated_checkout', renderServerWidgets );
 
 		// Tokens are single use, so a failed order attempt needs a fresh one.
 		$( document.body ).on( 'checkout_error', function () {
-			reset( noop );
+			var containers = document.querySelectorAll( 'form.checkout .wcct-turnstile' );
+			for ( var i = 0; i < containers.length; i++ ) {
+				reset( containers[ i ] );
+			}
 		} );
-
-		ensure();
 	}
 
 	/* Checkout block ------------------------------------------------------- */
@@ -105,6 +138,7 @@
 			'wc/store/checkout';
 		var scheduled = false;
 		var wasProcessing = false;
+		var blockContainer = null;
 
 		function setToken( token ) {
 			var actions = data.dispatch( storeKey );
@@ -125,8 +159,8 @@
 				return;
 			}
 
-			var container = actionsEl.parentNode.querySelector( '.wcct-turnstile' );
-			if ( container && isRendered( container ) ) {
+			var container = actionsEl.parentNode.querySelector( '.wcct-turnstile--blocks' );
+			if ( container && findWidget( container ) ) {
 				return;
 			}
 
@@ -136,8 +170,9 @@
 				actionsEl.parentNode.insertBefore( container, actionsEl );
 			}
 
+			blockContainer = container;
 			setToken( '' );
-			render( container, setToken );
+			render( container, cfg.checkoutAction, setToken );
 		}
 
 		function scheduleEnsure() {
@@ -162,10 +197,11 @@
 			}
 			var processing = select.isProcessing();
 			var finished = wasProcessing && ! processing;
-			// Update before resetting: reset() dispatches, which re-enters this listener.
+			// Update before resetting: setToken() dispatches, which re-enters this listener.
 			wasProcessing = processing;
-			if ( finished ) {
-				reset( setToken );
+			if ( finished && blockContainer ) {
+				setToken( '' );
+				reset( blockContainer );
 			}
 		} );
 	}
@@ -178,10 +214,10 @@
 		}
 		started = true;
 
+		initServerForms();
+
 		if ( cfg.isBlocks && window.wp && window.wp.data ) {
 			initBlocks( window.wp.data );
-		} else if ( window.jQuery ) {
-			initClassic( window.jQuery );
 		}
 	}
 

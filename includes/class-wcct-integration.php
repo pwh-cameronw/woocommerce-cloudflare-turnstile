@@ -20,7 +20,7 @@ class WCCT_Integration extends WC_Integration {
 		$this->method_title       = __( 'Cloudflare Turnstile', 'woocommerce-cloudflare-turnstile' );
 		$this->method_description = sprintf(
 			/* translators: %s: Cloudflare dashboard URL */
-			__( 'Protect the checkout from bots with Cloudflare Turnstile. Create a widget and get your keys from the <a href="%s" target="_blank" rel="noopener noreferrer">Cloudflare dashboard</a>.', 'woocommerce-cloudflare-turnstile' ),
+			__( 'Protect the checkout and My Account forms from bots with Cloudflare Turnstile. Create a widget and get your keys from the <a href="%s" target="_blank" rel="noopener noreferrer">Cloudflare dashboard</a>.', 'woocommerce-cloudflare-turnstile' ),
 			'https://dash.cloudflare.com/?to=/:account/turnstile'
 		);
 
@@ -37,25 +37,50 @@ class WCCT_Integration extends WC_Integration {
 		$defaults = WCCT_Settings::defaults();
 
 		$this->form_fields = array(
-			'enabled'           => array(
+			'enabled'               => array(
 				'title'   => __( 'Enable', 'woocommerce-cloudflare-turnstile' ),
 				'type'    => 'checkbox',
-				'label'   => __( 'Require Turnstile on the checkout page', 'woocommerce-cloudflare-turnstile' ),
+				'label'   => __( 'Enable Cloudflare Turnstile', 'woocommerce-cloudflare-turnstile' ),
 				'default' => $defaults['enabled'],
 			),
-			'site_key'          => array(
+			'protect_checkout'      => array(
+				'title'   => __( 'Checkout', 'woocommerce-cloudflare-turnstile' ),
+				'type'    => 'checkbox',
+				'label'   => __( 'Protect the checkout', 'woocommerce-cloudflare-turnstile' ),
+				'default' => $defaults['protect_checkout'],
+			),
+			'protect_login'         => array(
+				'title'       => __( 'My Account', 'woocommerce-cloudflare-turnstile' ),
+				'type'        => 'checkbox',
+				'label'       => __( 'Protect the login form', 'woocommerce-cloudflare-turnstile' ),
+				'description' => __( 'Also applies to the "Returning customer? Click here to login" form on the checkout.', 'woocommerce-cloudflare-turnstile' ),
+				'default'     => $defaults['protect_login'],
+			),
+			'protect_register'      => array(
+				'title'   => '',
+				'type'    => 'checkbox',
+				'label'   => __( 'Protect the registration form', 'woocommerce-cloudflare-turnstile' ),
+				'default' => $defaults['protect_register'],
+			),
+			'protect_lost_password' => array(
+				'title'   => '',
+				'type'    => 'checkbox',
+				'label'   => __( 'Protect the lost password form', 'woocommerce-cloudflare-turnstile' ),
+				'default' => $defaults['protect_lost_password'],
+			),
+			'site_key'              => array(
 				'title'       => __( 'Site key', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'text',
 				'description' => __( 'For testing, the site key 1x00000000000000000000AA always passes.', 'woocommerce-cloudflare-turnstile' ),
 				'default'     => '',
 			),
-			'secret_key'        => array(
+			'secret_key'            => array(
 				'title'       => __( 'Secret key', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'password',
 				'description' => __( 'For testing, the secret key 1x0000000000000000000000000000000AA always passes.', 'woocommerce-cloudflare-turnstile' ),
 				'default'     => '',
 			),
-			'theme'             => array(
+			'theme'                 => array(
 				'title'   => __( 'Theme', 'woocommerce-cloudflare-turnstile' ),
 				'type'    => 'select',
 				'default' => $defaults['theme'],
@@ -65,7 +90,7 @@ class WCCT_Integration extends WC_Integration {
 					'dark'  => __( 'Dark', 'woocommerce-cloudflare-turnstile' ),
 				),
 			),
-			'size'              => array(
+			'size'                  => array(
 				'title'   => __( 'Size', 'woocommerce-cloudflare-turnstile' ),
 				'type'    => 'select',
 				'default' => $defaults['size'],
@@ -75,7 +100,7 @@ class WCCT_Integration extends WC_Integration {
 					'compact'  => __( 'Compact', 'woocommerce-cloudflare-turnstile' ),
 				),
 			),
-			'appearance'        => array(
+			'appearance'            => array(
 				'title'   => __( 'Appearance', 'woocommerce-cloudflare-turnstile' ),
 				'type'    => 'select',
 				'default' => $defaults['appearance'],
@@ -84,33 +109,33 @@ class WCCT_Integration extends WC_Integration {
 					'interaction-only' => __( 'Only when interaction is required', 'woocommerce-cloudflare-turnstile' ),
 				),
 			),
-			'language'          => array(
+			'language'              => array(
 				'title'       => __( 'Language', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'text',
 				'description' => __( 'Widget language, e.g. "en" or "de-DE". Use "auto" to follow the visitor\'s browser.', 'woocommerce-cloudflare-turnstile' ),
 				'default'     => $defaults['language'],
 			),
-			'skip_logged_in'    => array(
+			'skip_logged_in'        => array(
 				'title'   => __( 'Logged-in customers', 'woocommerce-cloudflare-turnstile' ),
 				'type'    => 'checkbox',
-				'label'   => __( 'Do not require Turnstile for logged-in customers', 'woocommerce-cloudflare-turnstile' ),
+				'label'   => __( 'Do not require Turnstile at checkout for logged-in customers', 'woocommerce-cloudflare-turnstile' ),
 				'default' => $defaults['skip_logged_in'],
 			),
-			'protect_store_api' => array(
+			'protect_store_api'     => array(
 				'title'       => __( 'Store API', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'checkbox',
 				'label'       => __( 'Require Turnstile for Store API checkouts (Checkout block)', 'woocommerce-cloudflare-turnstile' ),
 				'description' => __( 'Keep this on: bots can place orders by calling /wp-json/wc/store/v1/checkout directly even if your site uses the classic checkout. Only disable it if a headless front end places orders through the Store API.', 'woocommerce-cloudflare-turnstile' ),
 				'default'     => $defaults['protect_store_api'],
 			),
-			'error_message'     => array(
+			'error_message'         => array(
 				'title'       => __( 'Error message', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'text',
 				'description' => __( 'Shown when the security check was not completed. Leave blank for the default.', 'woocommerce-cloudflare-turnstile' ),
 				'default'     => '',
 				'placeholder' => __( 'Please complete the security check before placing your order.', 'woocommerce-cloudflare-turnstile' ),
 			),
-			'debug'             => array(
+			'debug'                 => array(
 				'title'       => __( 'Debug log', 'woocommerce-cloudflare-turnstile' ),
 				'type'        => 'checkbox',
 				'label'       => __( 'Log failed verifications', 'woocommerce-cloudflare-turnstile' ),

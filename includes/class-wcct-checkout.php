@@ -21,11 +21,6 @@ class WCCT_Checkout {
 	const EXTENSION_NAMESPACE = 'cloudflare-turnstile';
 
 	/**
-	 * Name of the hidden field Turnstile adds to the classic checkout form.
-	 */
-	const RESPONSE_FIELD = 'cf-turnstile-response';
-
-	/**
 	 * Register hooks.
 	 */
 	public function init() {
@@ -41,103 +36,32 @@ class WCCT_Checkout {
 	}
 
 	/**
-	 * Whether the current page is a checkout page that shows the widget.
+	 * Enqueue assets on Checkout block pages.
 	 *
-	 * @return bool
-	 */
-	private function is_checkout_page() {
-		return function_exists( 'is_checkout' )
-			&& is_checkout()
-			&& ! is_wc_endpoint_url( 'order-received' )
-			&& ! is_wc_endpoint_url( 'order-pay' );
-	}
-
-	/**
-	 * Whether the current checkout page is built with the Checkout block.
-	 *
-	 * @return bool
-	 */
-	private function is_block_checkout() {
-		return function_exists( 'has_block' ) && has_block( 'woocommerce/checkout' );
-	}
-
-	/**
-	 * Enqueue the Turnstile API and the checkout integration script.
+	 * The classic checkout loads them when its widget is printed; the Checkout
+	 * block has no PHP hook for that, so it is detected here.
 	 */
 	public function enqueue_assets() {
-		if ( ! $this->is_checkout_page() ) {
+		if ( ! function_exists( 'is_checkout' ) || ! is_checkout() || is_wc_endpoint_url( 'order-received' ) || is_wc_endpoint_url( 'order-pay' ) ) {
 			return;
 		}
 
-		$is_blocks = $this->is_block_checkout();
-		$context   = $is_blocks ? 'store_api' : 'classic';
-		if ( ! WCCT_Settings::should_protect( $context ) ) {
-			return;
+		if ( function_exists( 'has_block' ) && has_block( 'woocommerce/checkout' ) && WCCT_Settings::should_protect( 'store_api' ) ) {
+			WCCT_Assets::enqueue( true );
 		}
-
-		$deps = array( 'jquery' );
-		if ( $is_blocks ) {
-			$deps = array( 'wp-data' );
-			if ( wp_script_is( 'wc-blocks-data-store', 'registered' ) ) {
-				$deps[] = 'wc-blocks-data-store';
-			}
-		}
-
-		wp_enqueue_style(
-			'wcct-checkout',
-			WCCT_PLUGIN_URL . 'assets/css/checkout.css',
-			array(),
-			WCCT_VERSION
-		);
-
-		wp_enqueue_script(
-			'wcct-checkout',
-			WCCT_PLUGIN_URL . 'assets/js/checkout.js',
-			$deps,
-			WCCT_VERSION,
-			array( 'in_footer' => true )
-		);
-
-		wp_localize_script(
-			'wcct-checkout',
-			'wcctTurnstileConfig',
-			array(
-				'siteKey'    => WCCT_Settings::get( 'site_key' ),
-				'action'     => WCCT_Verifier::ACTION,
-				'theme'      => WCCT_Settings::get( 'theme' ),
-				'size'       => WCCT_Settings::get( 'size' ),
-				'appearance' => WCCT_Settings::get( 'appearance' ),
-				'language'   => WCCT_Settings::get( 'language' ),
-				'namespace'  => self::EXTENSION_NAMESPACE,
-				'isBlocks'   => $is_blocks,
-			)
-		);
-
-		// Must be loaded straight from Cloudflare; it depends on our script so the
-		// onload callback is defined before the API runs.
-		wp_enqueue_script(
-			'wcct-turnstile-api',
-			'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=wcctTurnstileOnload',
-			array( 'wcct-checkout' ),
-			null, // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion -- version query strings are not allowed by Cloudflare.
-			array(
-				'in_footer' => true,
-				'strategy'  => 'defer',
-			)
-		);
 	}
 
 	/**
 	 * Output the widget container above the "Place order" button.
 	 *
 	 * The container lives inside the order review fragment, which WooCommerce
-	 * replaces on every checkout refresh; checkout.js re-renders it each time.
+	 * replaces on every checkout refresh; turnstile.js re-renders it each time.
 	 */
 	public function render_classic_widget() {
 		if ( ! WCCT_Settings::should_protect( 'classic' ) ) {
 			return;
 		}
-		echo '<div class="wcct-turnstile wcct-turnstile--classic"></div>';
+		WCCT_Assets::render_widget( 'classic' );
 	}
 
 	/**
@@ -156,11 +80,7 @@ class WCCT_Checkout {
 			return;
 		}
 
-		// WooCommerce has already verified the checkout nonce at this point.
-		// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$token = isset( $_POST[ self::RESPONSE_FIELD ] ) ? sanitize_text_field( wp_unslash( $_POST[ self::RESPONSE_FIELD ] ) ) : '';
-
-		$result = WCCT_Verifier::verify( $token );
+		$result = WCCT_Verifier::verify( WCCT_Assets::posted_token(), 'classic' );
 		if ( is_wp_error( $result ) ) {
 			$errors->add( 'wcct_turnstile', $result->get_error_message() );
 		}
@@ -216,7 +136,7 @@ class WCCT_Checkout {
 			$token = (string) $extensions[ self::EXTENSION_NAMESPACE ]['token'];
 		}
 
-		$result = WCCT_Verifier::verify( $token );
+		$result = WCCT_Verifier::verify( $token, 'store_api' );
 		if ( is_wp_error( $result ) ) {
 			throw new RouteException( 'woocommerce_rest_cloudflare_turnstile_failed', esc_html( $result->get_error_message() ), 400 );
 		}
